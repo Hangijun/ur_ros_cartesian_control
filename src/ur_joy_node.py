@@ -51,6 +51,9 @@ from tf2_msgs.msg import TFMessage
 # It used for convert quaternion to euler or euler to quaternion
 from scipy.spatial.transform import Rotation
 
+from ur_msgs.srv import SetIO, SetIORequest
+from ur_msgs.msg import IOStates
+
 from sensor_msgs.msg import Joy
 
 ALL_CONTROLLERS = [
@@ -141,7 +144,17 @@ class UR():
                 "Could not reach cartesian passthrough controller action. Make sure that the driver is actually running."
                 " Msg: {}".format(err))
 
-
+        # Connect to Gripper -Han
+        self.set_io_client = rospy.ServiceProxy('/ur_hardware_interface/set_io', SetIO)
+        try:
+            self.set_io_client.wait_for_service(timeout)
+        except rospy.exceptions.ROSException as err:
+            self.fail(
+                "Could not reach set_io service. Make sure that the driver is actually running."
+                " Msg: {}".format(err))
+        
+        self.set_io_client(1, 17, 0)
+        self.set_io_client(1, 16, 1)
 
         # ROS Publisher & Subscriber Initialization
         # ========================================
@@ -184,6 +197,21 @@ class UR():
         self.pose_quat[4] = data.transforms[0].transform.rotation.y
         self.pose_quat[5] = data.transforms[0].transform.rotation.z
         self.pose_quat[6] = data.transforms[0].transform.rotation.w
+    
+    # Function for UR robot's gripper
+    def gripper_control(self, gripper_on):
+        if gripper_on:
+            # For Two finger gripper
+            # self.set_io_client(1, 16, 1)
+            # Vaccum
+            self.set_io_client(1, 16, 0)
+            self.set_io_client(1, 17, 1)
+        else:
+            # For Two finger gripper
+            # self.set_io_client(1, 16, 0)
+            # Vaccum
+            self.set_io_client(1, 17, 0)
+            self.set_io_client(1, 16, 1)
 
     # Function for Joystick input to Cartesian movement
     # Convert Quaternion to Euler
@@ -226,7 +254,7 @@ class UR():
                 pose_euler[0] = pose_euler[0] + data.axes[1] * 0.001
             # angular movement
             else:
-                pose_euler[3] = pose_euler[3] + data.axes[1] * 0.5
+                pose_euler[3] = pose_euler[3] + data.axes[1] * 0.1
             time_from_start = time_trans
 
         # Left analog stick's right
@@ -237,7 +265,7 @@ class UR():
                 pose_euler[0] = pose_euler[0] + data.axes[1] * 0.001
             # angular movement
             else:
-                pose_euler[3] = pose_euler[3] + data.axes[1] * 0.5
+                pose_euler[3] = pose_euler[3] + data.axes[1] * 0.1
             time_from_start = time_trans
 
         # Left analog stick's up
@@ -248,7 +276,7 @@ class UR():
                 pose_euler[1] = pose_euler[1] + data.axes[0] * 0.001
             # angular movement
             else:
-                pose_euler[4] = pose_euler[4] + data.axes[0] * 0.5
+                pose_euler[4] = pose_euler[4] + data.axes[0] * 0.1
             time_from_start = time_trans
 
         # Left analog stick's down
@@ -259,7 +287,7 @@ class UR():
                 pose_euler[1] = pose_euler[1] + data.axes[0] * 0.001
             # angular movement
             else:
-                pose_euler[4] = pose_euler[4] + data.axes[0] * 0.5
+                pose_euler[4] = pose_euler[4] + data.axes[0] * 0.1
             
             time_from_start = time_trans
 
@@ -271,7 +299,7 @@ class UR():
                 pose_euler[2] = pose_euler[2] + (-(data.axes[2] - 1) / 2) * 0.001
             # angular movement
             else:
-                pose_euler[5] = pose_euler[5] + (-(data.axes[2] - 1) / 2) * 0.5
+                pose_euler[5] = pose_euler[5] + (-(data.axes[2] - 1) / 2) * 0.1
             time_from_start = time_trans
             
         #RT button
@@ -282,8 +310,15 @@ class UR():
                 pose_euler[2] = pose_euler[2] - (-(data.axes[5] - 1) / 2) * 0.001
             # angular movement
             else:
-                pose_euler[5] = pose_euler[5] - (-(data.axes[5] - 1) / 2) * 0.5
+                pose_euler[5] = pose_euler[5] - (-(data.axes[5] - 1) / 2) * 0.1
             time_from_start = time_trans
+
+        if data.buttons[1] == 1:
+            self.gripper_control(True)
+
+        if data.buttons[2] == 1:    
+            self.gripper_control(False)
+
 
         print(pose_euler)
         # check cartesian limit to 1.0 m of the 3d circle
