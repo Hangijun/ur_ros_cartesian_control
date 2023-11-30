@@ -163,7 +163,7 @@ class UR():
         # Subscribe TF Information of the End-Effector
         sub = rospy.Subscriber("/tf", TFMessage, self.callback)
         # Subscribe Joystic Information
-        js_sub = rospy.Subscriber("/joy", Joy, self.move)
+        js_sub = rospy.Subscriber("/joy", Joy, self.callback_joy)
 
         # Running up the Manipulator
         # ========================================
@@ -197,6 +197,14 @@ class UR():
         self.pose_quat[4] = data.transforms[0].transform.rotation.y
         self.pose_quat[5] = data.transforms[0].transform.rotation.z
         self.pose_quat[6] = data.transforms[0].transform.rotation.w
+
+    def callback_joy(self, data):
+        if self.sw_result:
+            self.move(data)
+        
+        if data.buttons[2] == 1:
+            self.finalize()
+            return False
     
     # Function for UR robot's gripper
     def gripper_control(self, gripper_on):
@@ -241,8 +249,8 @@ class UR():
         #print(pose_euler)
 
         time_from_start = 0.0
-        time_trans = 0.01
-        time_rot = 0.1
+        time_trans = 0.05
+        time_rot = 0.05
 
         # get Joystick input and add number to specific value 
         # If A button is clicked, roll, pitch, yaw movement is activated instead of X, Y, Z movement
@@ -265,7 +273,7 @@ class UR():
                 pose_euler[0] = pose_euler[0] + data.axes[1] * 0.001
             # angular movement
             else:
-                pose_euler[3] = pose_euler[3] + data.axes[1] * 0.1
+                pose_euler[3] = pose_euler[3] + data.axes[1] * 0.2
             time_from_start = time_trans
 
         # Left analog stick's up
@@ -307,7 +315,7 @@ class UR():
             #print("z - ")   
             # linear movement 
             if data.buttons[0] == 0:         
-                pose_euler[2] = pose_euler[2] - (-(data.axes[5] - 1) / 2) * 0.001
+                pose_euler[2] = pose_euler[2] - (-(data.axes[5] - 1) / 2) * 0.002
             # angular movement
             else:
                 pose_euler[5] = pose_euler[5] - (-(data.axes[5] - 1) / 2) * 0.1
@@ -316,7 +324,7 @@ class UR():
         if data.buttons[1] == 1:
             self.gripper_control(True)
 
-        if data.buttons[2] == 1:    
+        if data.buttons[3] == 1:    
             self.gripper_control(False)
 
 
@@ -395,6 +403,8 @@ class UR():
         self.set_mode_client.wait_for_result()
         return self.set_mode_client.get_result().success
 
+    sw_result = False
+
     # Function to Switch the Controller for UR Robot
     def switch_on_controller(self, controller_name):
         """Switches on the given controller stopping all other known controllers with best_effort
@@ -405,6 +415,7 @@ class UR():
         srv.strictness = SwitchControllerRequest.BEST_EFFORT
         result = self.switch_controllers_client(srv)
         print(result)
+        self.sw_result = result
 
     # Function to Power OFF of UR Robot When the Program is over
     def finalize(self):
@@ -418,3 +429,4 @@ if __name__ == '__main__':
         ur = UR()
     except rospy.ROSInterruptException: pass
     rospy.spin()
+
